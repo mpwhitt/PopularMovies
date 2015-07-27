@@ -152,7 +152,8 @@ public class MainFragment extends Fragment
 
     public class FetchMoviesTask extends AsyncTask<String, Void, String>
     {
-
+        //Portions of the following code were copied from the Sunshine app.  The weather data
+        //code was replaced as necessary to parse the movie json
         private final String LOG_TAG = FetchMoviesTask.class.getSimpleName();
 
         protected String doInBackground(String... params) {
