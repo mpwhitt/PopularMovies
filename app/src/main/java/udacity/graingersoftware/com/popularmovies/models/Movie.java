@@ -1,6 +1,7 @@
 package udacity.graingersoftware.com.popularmovies.models;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Date;
 
 /**
@@ -17,6 +18,8 @@ public class Movie implements Serializable
     public double mVoteAverage;
     public int mVoteCount;
     public Date mReleaseDate;
+    public ArrayList<Trailer> mTrailers;
+    public ArrayList<Review> mRatings;
 
     public Movie()
     {
@@ -128,5 +131,23 @@ public class Movie implements Serializable
         mVoteCount = voteCount;
     }
 
+    public ArrayList<Trailer> getTrailers()
+    {
+        return mTrailers;
+    }
 
+    public void setTrailers(final ArrayList<Trailer> trailers)
+    {
+        mTrailers = trailers;
+    }
+
+    public ArrayList<Review> getRatings()
+    {
+        return mRatings;
+    }
+
+    public void setRatings(final ArrayList<Review> ratings)
+    {
+        mRatings = ratings;
+    }
 }

@@ -4,7 +4,7 @@
     <string name="title_activity_settings">App Settings</string>
 
     <!--MOVIE API KEY (REMOVE PRIOR TO PUSHING TO GITHUB)-->
-    <string name="movie_api_key">@API_KEY@</string>
+    <string name="movie_api_key">9988c02ff8088b84cadd3ca24c59105d</string>
 
     <!--************   Prefs Strings and String Arrays  *****************-->
     <string name="prefs_sort_label">Sort by...</string>
@@ -27,8 +27,13 @@
 
     <string name="favorite_button_text">MARK AS FAVORITE</string>
     <string name="movie_base_url">https://api.themoviedb.org/3/discover/movie?</string>
+
+    <string name="rating_trailer_base_url">https://api.themoviedb.org/3/movie</string>
+
     <string name="poster_base_url">http://image.tmdb.org/t/p/w185</string>
     <string name="synopsis_not_available">Plot synopsis not available.</string>
 
+    <string name="trailer_heading">Trailers:</string>
+    <string name="review_heading">Reviews:</string>
 
 </resources>
