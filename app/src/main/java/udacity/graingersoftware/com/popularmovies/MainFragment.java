@@ -1,8 +1,9 @@
 package udacity.graingersoftware.com.popularmovies;
 
-import android.content.Intent;
+import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.res.Configuration;
+import android.database.Cursor;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
@@ -25,13 +26,10 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.text.DateFormat;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
+import java.text.DecimalFormat;
 import java.util.ArrayList;
-import java.util.Date;
-import java.util.Locale;
 
+import udacity.graingersoftware.com.popularmovies.data.MovieContract;
 import udacity.graingersoftware.com.popularmovies.models.Movie;
 import udacity.graingersoftware.com.popularmovies.models.MovieList;
 
@@ -46,34 +44,46 @@ public class MainFragment extends Fragment
     private ImageAdapter mImageAdapter;
     private String mSortOrder;
     private SharedPreferences mPrefs;
+    private Context mContext;
+    private boolean mTwoPane;
+    private Callback mCallback;
 
     public MainFragment()
     {
     }
+
+    public interface Callback
+    {
+        public boolean isTwoPane();
+        public void onItemClick(Movie movie);
+    }
+
+
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState)
     {
         View rootView = inflater.inflate(R.layout.fragment_main, container, false);
+        mContext = getActivity();
+
+        mCallback = (MainActivity)mContext;
+        mTwoPane = mCallback.isTwoPane();
 
         //Get the current sort order
         mPrefs = PreferenceManager.getDefaultSharedPreferences(getActivity());
         mSortOrder = mPrefs.getString(getString(R.string.prefs_sort_key), getString(R.string.prefs_sort_default));
 
         mGridView = (GridView)rootView.findViewById(R.id.gridView);
-        mImageAdapter = new ImageAdapter(getActivity(), new ArrayList<Movie>());
+        mImageAdapter = new ImageAdapter(getActivity(), new ArrayList<Movie>(), mTwoPane);
         mGridView.setAdapter(mImageAdapter);
         mGridView.setOnItemClickListener(new AdapterView.OnItemClickListener()
         {
             public void onItemClick(AdapterView<?> parent, View v,
                                     int position, long id)
             {
-                Intent wIntent = new Intent(getActivity(), DetailActivity.class);
-                //Bundle the data to pass to the new intent
                 Movie wSelectedMovie = (Movie) mImageAdapter.getMovies().get(position);
-                wIntent.putExtra("movie", wSelectedMovie);
-                startActivity(wIntent);
+                mCallback.onItemClick(wSelectedMovie);
             }
         });
 
@@ -92,7 +102,7 @@ public class MainFragment extends Fragment
             else
             {
                 MovieList wMovieList = (MovieList)savedInstanceState.getSerializable("movies");
-                mImageAdapter = new ImageAdapter(getActivity(), wMovieList.getMovies());
+                mImageAdapter = new ImageAdapter(getActivity(), wMovieList.getMovies(), mTwoPane);
                 mGridView.setAdapter(mImageAdapter);
             }
         }
@@ -128,7 +138,7 @@ public class MainFragment extends Fragment
     {
         super.onStart();
         Configuration config = getResources().getConfiguration();
-        if (config.orientation == Configuration.ORIENTATION_PORTRAIT)
+        if (config.orientation == Configuration.ORIENTATION_PORTRAIT || mTwoPane)
         {
             mGridView.setNumColumns(2);
         }
@@ -141,7 +151,8 @@ public class MainFragment extends Fragment
         {
             updateMovies();
         }
-        else if (!mSortOrder.equals(wSortOption))
+        //Always refresh if viewing favorites in case one is removed while in detail view
+        else if (!mSortOrder.equals(wSortOption) || mSortOrder.equals(getString(R.string.favorites_sort_param)))
         {
             //The user has changed the sort order in preferences.  Update the list to the new
             //sort order
@@ -150,13 +161,11 @@ public class MainFragment extends Fragment
         }
     }
 
-    public class FetchMoviesTask extends AsyncTask<String, Void, String>
+    public class FetchMoviesTask extends AsyncTask<String, Void, Void>
     {
-        //Portions of the following code were copied from the Sunshine app.  The weather data
-        //code was replaced as necessary to parse the movie json
         private final String LOG_TAG = FetchMoviesTask.class.getSimpleName();
 
-        protected String doInBackground(String... params) {
+        protected Void doInBackground(String... params) {
             // These two need to be declared outside the try/catch
             // so that they can be closed in the finally block.
             HttpURLConnection urlConnection = null;
@@ -168,44 +177,90 @@ public class MainFragment extends Fragment
             String apiKey = getString(R.string.movie_api_key);
 
             try {
-                // Construct the URL for the MoviesDB query
+                if (null != params && params[0].equals(getString(R.string.favorites_sort_param)))
+                {
+                    ArrayList<Movie> wMovies = new ArrayList<>();
+                    //Get movies with db query
+                    //Set image adapter
+                    Cursor wMovieCursor = mContext.getContentResolver().query(
+                            MovieContract.MovieEntry.CONTENT_URI_ALL,
+                            MovieContract.MovieEntry.FULL_PROJECTION,
+                            null, null,
+                            MovieContract.MovieEntry.COLUMN_MOVIE_VOTE_AVERAGE + " DESC"
+                    );
 
-                //https://api.themoviedb.org/3/discover/movie?sort_by=popularity.desc&api_key=@APIKEY@
-                final String MOVIE_BASE_URL = getString(R.string.movie_base_url);
-                final String SORT_BY_PARAM = "sort_by";
-                final String API_KEY_PARAM = "api_key";
+                    while (wMovieCursor.moveToNext())
+                    {
+                        Movie wMovie = new Movie();
+                        wMovie.setId(wMovieCursor.getInt(MovieContract.MovieEntry.COLUMN_ID_INT));
+                        wMovie.setMovieId(wMovieCursor.getString(MovieContract.MovieEntry.COLUMN_MOVIE_ID_INT));
+                        wMovie.setTitle(wMovieCursor.getString(MovieContract.MovieEntry.COLUMN_MOVIE_TITLE_INT));
+                        wMovie.setBackdropPath(wMovieCursor.getString(MovieContract.MovieEntry.COLUMN_MOVIE_BACKDROP_PATH_INT));
+                        wMovie.setPosterPath(wMovieCursor.getString(MovieContract.MovieEntry.COLUMN_MOVIE_POSTER_PATH_INT));
+                        wMovie.setOverview(wMovieCursor.getString(MovieContract.MovieEntry.COLUMN_MOVIE_OVERVIEW_INT));
+                        wMovie.setPopularity(wMovieCursor.getFloat(MovieContract.MovieEntry.COLUMN_MOVIE_POPULARITY_INT));
 
-                Uri builtUri = Uri.parse(MOVIE_BASE_URL).buildUpon()
-                        .appendQueryParameter(SORT_BY_PARAM, params[0])
-                        .appendQueryParameter(API_KEY_PARAM, apiKey)
-                        .build();
+                        double wVoteAverage = wMovieCursor.getFloat(MovieContract.MovieEntry.COLUMN_MOVIE_VOTE_AVERAGE_INT);
+                        DecimalFormat wFormat = new DecimalFormat("#.#");
+                        wVoteAverage = Double.valueOf(wFormat.format(wVoteAverage));
 
-                URL url = new URL(builtUri.toString());
-                Log.v(LOG_TAG, "Built URI " + builtUri.toString());
+                        wMovie.setVoteAverage(wVoteAverage);
+                        wMovie.setVoteCount(wMovieCursor.getInt(MovieContract.MovieEntry.COLUMN_MOVIE_VOTE_COUNT_INT));
+                        wMovie.setReleaseDate(wMovieCursor.getLong(MovieContract.MovieEntry.COLUMN_MOVIE_RELEASE_DATE_INT));
+                        wMovies.add(wMovie);
+                    }
 
-                // Create the request to MoviesDB, and open the connection
-                urlConnection = (HttpURLConnection) url.openConnection();
-                urlConnection.setRequestMethod("GET");
-                urlConnection.connect();
-
-                // Read the input stream into a String
-                InputStream inputStream = urlConnection.getInputStream();
-                StringBuffer buffer = new StringBuffer();
-                if (inputStream == null) {
-                    // Nothing to do.
-                    return null;
+                    mImageAdapter.setMovies(wMovies);
                 }
-                reader = new BufferedReader(new InputStreamReader(inputStream));
+                else
+                {
+                    // Construct the URL for the MoviesDB query
+                    //https://api.themoviedb.org/3/discover/movie?sort_by=popularity.desc&api_key=@APIKEY@
+                    final String MOVIE_BASE_URL = getString(R.string.movie_base_url);
+                    final String SORT_BY_PARAM = "sort_by";
+                    final String API_KEY_PARAM = "api_key";
 
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    buffer.append(line + "\n");
+                    Uri builtUri = Uri.parse(MOVIE_BASE_URL).buildUpon()
+                            .appendQueryParameter(SORT_BY_PARAM, params[0])
+                            .appendQueryParameter(API_KEY_PARAM, apiKey)
+                            .build();
+
+                    URL url = new URL(builtUri.toString());
+                    Log.v(LOG_TAG, "Built URI " + builtUri.toString());
+
+                    // Create the request to MoviesDB, and open the connection
+                    urlConnection = (HttpURLConnection) url.openConnection();
+                    urlConnection.setRequestMethod("GET");
+                    urlConnection.connect();
+
+                    // Read the input stream into a String
+                    InputStream inputStream = urlConnection.getInputStream();
+                    StringBuffer buffer = new StringBuffer();
+                    if (inputStream == null) {
+                        // Nothing to do.
+                        return null;
+                    }
+                    reader = new BufferedReader(new InputStreamReader(inputStream));
+
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        buffer.append(line + "\n");
+                    }
+
+                    if (buffer.length() == 0) {
+                        return null;
+                    }
+                    moviesJsonString = buffer.toString();
+                    mImageAdapter.clear();
+                    try
+                    {
+                        mImageAdapter.setMovies(getMovieDataFromJson(moviesJsonString));
+                    } catch (JSONException e)
+                    {
+                        e.printStackTrace();
+                    }
                 }
 
-                if (buffer.length() == 0) {
-                    return null;
-                }
-                moviesJsonString = buffer.toString();
             } catch (IOException e) {
                 Log.e(LOG_TAG, "Error ", e);
                 // If the code didn't successfully get the movie data, there's no point in attemping
@@ -223,28 +278,10 @@ public class MainFragment extends Fragment
                     }
                 }
             }
-
-            try
-            {
-                return moviesJsonString;
-            }
-            catch (Exception e)
-            {
-                Log.e(LOG_TAG, e.getMessage(), e);
-                e.printStackTrace();
-                return null;
-            }
+            return null;
         }
 
-        protected void onPostExecute(String result) {
-            mImageAdapter.clear();
-            try
-            {
-                mImageAdapter.setMovies(getMovieDataFromJson(result));
-            } catch (JSONException e)
-            {
-                e.printStackTrace();
-            }
+        protected void onPostExecute(Void params) {
             mImageAdapter.notifyDataSetChanged();
         }
         private ArrayList<Movie> getMovieDataFromJson(String movieJsonStr)
@@ -272,9 +309,9 @@ public class MainFragment extends Fragment
                 try
                 {
                     String backdropPath;
-                    long id = 0;
+                    String movieId;
                     String overview;
-                    Date releaseDate;
+                    long releaseDate;
                     String posterPath;
                     double popularity = 0;
                     String title;
@@ -284,24 +321,16 @@ public class MainFragment extends Fragment
                     JSONObject thisMovie = movieArray.getJSONObject(i);
 
                     backdropPath = thisMovie.getString(MOVIE_BACKDROP_PATH);
-                    id = Long.parseLong(thisMovie.getString(MOVIE_ID));
+                    movieId = thisMovie.getString(MOVIE_ID);
                     overview = thisMovie.getString(MOVIE_OVERVIEW);
-                    DateFormat format = new SimpleDateFormat("MMMM d, yyyy", Locale.ENGLISH);
-                    try
-                    {
-                        releaseDate = format.parse(thisMovie.getString(MOVIE_RELEASE_DATE));
-                    } catch (ParseException e)
-                    {
-                        e.printStackTrace();
-                        releaseDate = new Date();
-                    }
+                    releaseDate = Long.parseLong(thisMovie.getString(MOVIE_RELEASE_DATE).replace("-", ""));
                     posterPath = thisMovie.getString(MOVIE_POSTER_PATH);
                     popularity = Double.parseDouble(thisMovie.getString(MOVIE_POPULARITY));
                     title = thisMovie.getString(MOVIE_TITLE);
                     voteAverage = Double.parseDouble(thisMovie.getString(MOVIE_VOTE_AVERAGE));
                     voteCount = Integer.parseInt(thisMovie.getString(MOVIE_VOTE_COUNT));
 
-                    Movie thisMovieObject = new Movie(id, title, backdropPath, posterPath,
+                    Movie thisMovieObject = new Movie(movieId, title, backdropPath, posterPath,
                             overview, popularity, voteAverage, voteCount, releaseDate);
                     wMovies.add(thisMovieObject);
                 }
