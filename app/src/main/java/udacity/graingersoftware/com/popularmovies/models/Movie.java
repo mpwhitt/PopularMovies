@@ -2,7 +2,6 @@ package udacity.graingersoftware.com.popularmovies.models;
 
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Date;
 
 /**
  * Created by graingersoftware on 7/20/15.
@@ -10,6 +9,7 @@ import java.util.Date;
 public class Movie implements Serializable
 {
     public long mId;
+    public String mMovieId;
     public String mBackdropPath;
     public String mPosterPath;
     public String mTitle;
@@ -17,20 +17,21 @@ public class Movie implements Serializable
     public double mPopularity;
     public double mVoteAverage;
     public int mVoteCount;
-    public Date mReleaseDate;
+    public long mReleaseDate;
     public ArrayList<Trailer> mTrailers;
-    public ArrayList<Review> mRatings;
+    public ArrayList<Review> mReviews;
+    public boolean mIsFavorite;
 
     public Movie()
     {
 
     }
 
-    public Movie(long id, String title, String backdropPath, String posterPath,
+    public Movie(String movieId, String title, String backdropPath, String posterPath,
                  String overview, double popularity, double voteAverage, int voteCount,
-                 Date releaseDate)
+                 long releaseDate)
     {
-        this.mId = id;
+        this.mMovieId = movieId;
         this.mTitle = title;
         this.mBackdropPath = backdropPath;
         this.mPosterPath = posterPath;
@@ -49,6 +50,16 @@ public class Movie implements Serializable
     public void setId(final long id)
     {
         mId = id;
+    }
+
+    public String getMovieId()
+    {
+        return mMovieId;
+    }
+
+    public void setMovieId(final String movieId)
+    {
+        mMovieId = movieId;
     }
 
     public String getBackdropPath()
@@ -91,12 +102,12 @@ public class Movie implements Serializable
         mOverview = overview;
     }
 
-    public Date getReleaseDate()
+    public long getReleaseDate()
     {
         return mReleaseDate;
     }
 
-    public void setReleaseDate(final Date releaseDate)
+    public void setReleaseDate(final long releaseDate)
     {
         mReleaseDate = releaseDate;
     }
@@ -141,13 +152,23 @@ public class Movie implements Serializable
         mTrailers = trailers;
     }
 
-    public ArrayList<Review> getRatings()
+    public ArrayList<Review> getReviews()
     {
-        return mRatings;
+        return mReviews;
     }
 
-    public void setRatings(final ArrayList<Review> ratings)
+    public void setReviews(final ArrayList<Review> reviews)
     {
-        mRatings = ratings;
+        mReviews = reviews;
+    }
+
+    public boolean isFavorite()
+    {
+        return mIsFavorite;
+    }
+
+    public void setIsFavorite(final boolean isFavorite)
+    {
+        mIsFavorite = isFavorite;
     }
 }

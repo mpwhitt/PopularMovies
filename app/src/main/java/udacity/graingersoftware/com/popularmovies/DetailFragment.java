@@ -1,14 +1,26 @@
 package udacity.graingersoftware.com.popularmovies;
 
+import android.content.ContentUris;
+import android.content.ContentValues;
 import android.content.Context;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.database.Cursor;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.preference.PreferenceManager;
 import android.support.v4.app.Fragment;
+import android.support.v7.app.ActionBar;
+import android.support.v7.app.ActionBarActivity;
 import android.util.Log;
+import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.AdapterView;
+import android.widget.Button;
+import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.TextView;
 
@@ -24,7 +36,9 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
 
+import udacity.graingersoftware.com.popularmovies.data.MovieContract;
 import udacity.graingersoftware.com.popularmovies.models.Movie;
+import udacity.graingersoftware.com.popularmovies.models.MyButtonInterface;
 import udacity.graingersoftware.com.popularmovies.models.Review;
 import udacity.graingersoftware.com.popularmovies.models.Trailer;
 
@@ -32,7 +46,7 @@ import udacity.graingersoftware.com.popularmovies.models.Trailer;
 /**
  * A placeholder fragment containing a simple view.
  */
-public class DetailFragment extends Fragment
+public class DetailFragment extends Fragment implements MyButtonInterface, Button.OnClickListener
 {
 
     private String LOG_TAG = getClass().getSimpleName();
@@ -40,8 +54,8 @@ public class DetailFragment extends Fragment
     private ListView mListView;
     private DetailListViewAdapter mDetailListViewAdapter;
     private Movie mSelectedMovie;
-    private ArrayList<Review> mReviews;
-    private ArrayList<Trailer> mTrailers;
+    private Button mToggleButton;
+    private boolean mIsTwoPane;
 
     public DetailFragment()
     {
@@ -51,79 +65,282 @@ public class DetailFragment extends Fragment
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState)
     {
+        Bundle wBundle = getArguments();
+        if (wBundle == null && savedInstanceState == null)
+        {
+            return null;
+        }
         View rootView = inflater.inflate(R.layout.fragment_detail, container, false);
         mContext = getActivity();
-        Bundle wBundle = getActivity().getIntent().getExtras();
-        mSelectedMovie = (Movie)wBundle.getSerializable("movie");
 
-        mListView = (ListView)rootView.findViewById(R.id.listView);
+        if (savedInstanceState != null)
+        {
+            mSelectedMovie = (Movie)savedInstanceState.getSerializable("movie");
+            mIsTwoPane = savedInstanceState.getBoolean("isTwoPane");
+        }
+        else
+        {
+            mSelectedMovie = (Movie)wBundle.getSerializable("movie");
+            mIsTwoPane = wBundle.getBoolean("isTwoPane");
+            if (mSelectedMovie != null)
+            {
+                FetchTrailersAndRatingsTask wFetchTrailersAndRatingsTask = new FetchTrailersAndRatingsTask();
+                wFetchTrailersAndRatingsTask.execute(new String[]{String.valueOf(mSelectedMovie.getMovieId())});
+            }
+        }
+        if (mSelectedMovie == null)
+        {
+            return null;
+        }
+        setFavoriteStar();
 
         //Set the movie title
         TextView wTitleTextView = (TextView)rootView.findViewById(R.id.movieTitle);
         wTitleTextView.setText(mSelectedMovie.getTitle());
+        mListView = (ListView)rootView.findViewById(R.id.listView);
+        mListView.setOnItemClickListener(new ListView.OnItemClickListener()
+        {
+            @Override
+            public void onItemClick(final AdapterView<?> parent, final View view, final int position, final long id)
+            {
+                //We know that since this row was clicked, it has to be a trailer row, since
+                //those are the only listview rows that are enabled.
+                //Get the actual position so that the proper uri can be set
+                int actualPosition = position - 2; // Account for the detail row and video trailer title row
+                Trailer wTrailer = mSelectedMovie.getTrailers().get(actualPosition);
 
-        FetchTrailersAndRatingsTask wFetchTrailersAndRatingsTask = new FetchTrailersAndRatingsTask();
-        wFetchTrailersAndRatingsTask.execute(new String[]{ String.valueOf(mSelectedMovie.getId()) });
+                final String MOVIE_BASE_URL = getString(R.string.youtube_base_url);
+                final String KEY_PARAM = "v";
 
+                Uri trailerUri = Uri.parse(MOVIE_BASE_URL).buildUpon()
+                        .appendQueryParameter(KEY_PARAM, wTrailer.getKey())
+                        .build();
 
+                startActivity(new Intent(Intent.ACTION_VIEW, trailerUri));
+            }
+        });
+
+        if (savedInstanceState != null)
+        {
+            populateListview();
+        }
         return rootView;
+    }
+
+    public void setToggleButton(Button button)
+    {
+        mToggleButton = button;
+    }
+
+    @Override
+    public void onSaveInstanceState(final Bundle outState)
+    {
+        super.onSaveInstanceState(outState);
+        outState.putSerializable("movie", mSelectedMovie);
+        outState.putBoolean("isTwoPane", mIsTwoPane);
+    }
+
+
+
+    //Interface method
+    public void setFavoriteStar()
+    {
+        //Image in action bar
+        ((ActionBarActivity)getActivity()).getSupportActionBar().setDisplayOptions(((
+                ActionBarActivity) getActivity()).getSupportActionBar().getDisplayOptions() | ActionBar.DISPLAY_SHOW_CUSTOM);
+
+        ImageView imageView = new ImageView(((ActionBarActivity)getActivity()).getSupportActionBar().getThemedContext());
+        imageView.setScaleType(ImageView.ScaleType.CENTER);
+
+        int wDrawableInt = 0;
+        if (mSelectedMovie.isFavorite())
+        {
+            wDrawableInt = android.R.drawable.star_big_on;
+        }
+        else
+        {
+            wDrawableInt = android.R.drawable.star_big_off;
+        }
+
+        imageView.setImageResource(wDrawableInt);
+
+        ActionBar.LayoutParams layoutParams = new ActionBar.LayoutParams(
+                ActionBar.LayoutParams.WRAP_CONTENT,
+                ActionBar.LayoutParams.WRAP_CONTENT,
+                Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+        layoutParams.rightMargin = 40;
+
+        imageView.setLayoutParams(layoutParams);
+        ((ActionBarActivity)getActivity()).getSupportActionBar().setCustomView(imageView);
+
+        imageView.setOnClickListener(new ImageView.OnClickListener()
+        {
+            @Override
+            public void onClick(final View v)
+            {
+                toggleMovie();
+            }
+        });
+        //END of image code
+    }
+
+    public void addOrRemoveFavorite()
+    {
+        if (mSelectedMovie.isFavorite())
+        {
+            removeMovieFromFavorites();
+        }
+        else
+        {
+            addMovieToFavorites();
+        }
+        mSelectedMovie.setIsFavorite(!mSelectedMovie.isFavorite());
     }
 
     private void populateListview()
     {
-        mDetailListViewAdapter = new DetailListViewAdapter(getActivity(), mSelectedMovie, mReviews, mTrailers);
-
-
-
-
+        mDetailListViewAdapter = new DetailListViewAdapter(getActivity(), this, mSelectedMovie, this);
         mListView.setAdapter(mDetailListViewAdapter);
     }
 
-
-
-
-    public class FetchTrailersAndRatingsTask extends AsyncTask<String, String, String[]>
+    @Override
+    public void onClick(final View v)
     {
-        //Portions of the following code were copied from the Sunshine app.  The weather data
-        //code was replaced as necessary to parse the movie json
+        toggleMovie();
+    }
+
+    private void toggleMovie()
+    {
+        addOrRemoveFavorite();
+        setButtonText(mToggleButton);
+        setFavoriteStar();
+        // If the user is removing this movie and the sort order is "Favorites" refresh the list
+        // Otherwise leave the list alone because nothing will have changed
+        // Get the current sort order
+        SharedPreferences wPrefs = PreferenceManager.getDefaultSharedPreferences(mContext);
+        String wSortOrder = wPrefs.getString(getString(R.string.prefs_sort_key), getString(R.string.prefs_sort_default));
+        //Also check to see if this is a 2 pane layout
+        if (wSortOrder.equals(getString(R.string.favorites_sort_param)) && mIsTwoPane)
+        {
+            MainFragment wMainFragment = (MainFragment)getFragmentManager().findFragmentById(R.id.fragment_main);
+            wMainFragment.updateMovies();
+        }
+    }
+
+    public void setButtonText(Button button)
+    {
+        if (mSelectedMovie.isFavorite())
+        {
+            button.setText(mContext.getString(R.string.favorite_button_text_remove));
+        }
+        else
+        {
+            button.setText(mContext.getString(R.string.favorite_button_text_mark));
+        }
+
+    }
+
+    public class FetchTrailersAndRatingsTask extends AsyncTask<String, String, Void>
+    {
         private final String LOG_TAG = FetchTrailersAndRatingsTask.class.getSimpleName();
 
-        protected String[] doInBackground(String... params) {
-            // Will contain the raw JSON response as a string.
-            String trailersJsonString = null;
-            String reviewsJsonString = null;
-            String apiKey = getString(R.string.movie_api_key);
+        protected Void doInBackground(String... params) {
 
-            final String MOVIE_BASE_URL = getString(R.string.rating_trailer_base_url);
-            final String RATING_PATH = "reviews";
-            final String TRAILER_PATH = "videos";
-            final String API_KEY_PARAM = "api_key";
-            final String MOVIE_ID = params[0];
-
-            Uri trailerUri = Uri.parse(MOVIE_BASE_URL).buildUpon()
-                    .appendPath(MOVIE_ID)
-                    .appendPath(TRAILER_PATH)
-                    .appendQueryParameter(API_KEY_PARAM, apiKey)
-                    .build();
-
-            Uri ratingUri = Uri.parse(MOVIE_BASE_URL).buildUpon()
-                    .appendPath(MOVIE_ID)
-                    .appendPath(RATING_PATH)
-                    .appendQueryParameter(API_KEY_PARAM, apiKey)
-                    .build();
-
-            try
+            //Determine if this movie is stored in the database as a favorite
+            long _id = checkIfMovieExists(mSelectedMovie.getMovieId());
+            if (_id != -1)
             {
-                trailersJsonString = makeRequest(trailerUri);
-                reviewsJsonString = makeRequest(ratingUri);
-                return new String[]{ trailersJsonString, reviewsJsonString };
+                mSelectedMovie.setId(_id);
+                retrieveMovieDataFromDatabase(_id);
+                mSelectedMovie.setIsFavorite(true);
             }
-            catch (Exception e)
+            else
             {
-                Log.e(LOG_TAG, e.getMessage(), e);
-                e.printStackTrace();
-                return null;
+                try
+                {
+                    // Will contain the raw JSON response as a string.
+                    String trailersJsonString = null;
+                    String reviewsJsonString = null;
+                    String apiKey = getString(R.string.movie_api_key);
+
+                    final String MOVIE_BASE_URL = getString(R.string.rating_trailer_base_url);
+                    final String RATING_PATH = "reviews";
+                    final String TRAILER_PATH = "videos";
+                    final String API_KEY_PARAM = "api_key";
+                    final String MOVIE_ID = params[0];
+
+                    Uri trailerUri = Uri.parse(MOVIE_BASE_URL).buildUpon()
+                            .appendPath(MOVIE_ID)
+                            .appendPath(TRAILER_PATH)
+                            .appendQueryParameter(API_KEY_PARAM, apiKey)
+                            .build();
+
+                    Uri ratingUri = Uri.parse(MOVIE_BASE_URL).buildUpon()
+                            .appendPath(MOVIE_ID)
+                            .appendPath(RATING_PATH)
+                            .appendQueryParameter(API_KEY_PARAM, apiKey)
+                            .build();
+                    trailersJsonString = makeRequest(trailerUri);
+                    reviewsJsonString = makeRequest(ratingUri);
+                    mSelectedMovie.setTrailers(getTrailersFromJson(trailersJsonString));
+                    mSelectedMovie.setReviews(getReviewsFromJson(reviewsJsonString));
+                }
+                catch (Exception e)
+                {
+                    Log.e(LOG_TAG, e.getMessage(), e);
+                    e.printStackTrace();
+                    return null;
+                }
             }
+            return null;
+        }
+
+        private void retrieveMovieDataFromDatabase(long id)
+        {
+            ArrayList<Trailer> wTrailers = new ArrayList<>();
+            ArrayList<Review> wReviews = new ArrayList<>();
+            Cursor wTrailerCursor = mContext.getContentResolver().query(
+                    MovieContract.TrailerEntry.buildTrailerUriWithMovieId(String.valueOf(id)),
+                    new String[]{MovieContract.TrailerEntry.COLUMN_TRAILER_NAME,
+                            MovieContract.TrailerEntry.COLUMN_TRAILER_KEY},
+                    MovieContract.TrailerEntry.COLUMN_MOVIE_ID + MovieContract.SELECTION_SUFFIX,
+                    new String[]{ String.valueOf(id) },
+                    null
+            );
+            while (wTrailerCursor.moveToNext())
+            {
+                Trailer wTrailer = new Trailer();
+                int wTrailerNameIndex = wTrailerCursor.getColumnIndex(MovieContract.TrailerEntry.COLUMN_TRAILER_NAME);
+                wTrailer.setName(wTrailerCursor.getString(wTrailerNameIndex));
+                int wTrailerKeyIndex = wTrailerCursor.getColumnIndex(MovieContract.TrailerEntry.COLUMN_TRAILER_KEY);
+                wTrailer.setKey(wTrailerCursor.getString(wTrailerKeyIndex));
+                wTrailers.add(wTrailer);
+            }
+
+            Cursor wReviewCursor = mContext.getContentResolver().query(
+                    MovieContract.ReviewEntry.buildReviewUriWithMovieId(String.valueOf(id)),
+                    new String[]{
+                            MovieContract.ReviewEntry.COLUMN_REVIEW_ID,
+                            MovieContract.ReviewEntry.COLUMN_REVIEW_AUTHOR,
+                            MovieContract.ReviewEntry.COLUMN_REVIEW_CONTENT},
+                    MovieContract.ReviewEntry.COLUMN_MOVIE_ID + MovieContract.SELECTION_SUFFIX,
+                    new String[]{ String.valueOf(id) },
+                    null
+            );
+
+            while (wReviewCursor.moveToNext())
+            {
+                Review wReview = new Review();
+                int wReviewIdIndex = wReviewCursor.getColumnIndex(MovieContract.ReviewEntry.COLUMN_REVIEW_ID);
+                wReview.setId(wReviewCursor.getString(wReviewIdIndex));
+                int wReviewAuthorIndex = wReviewCursor.getColumnIndex(MovieContract.ReviewEntry.COLUMN_REVIEW_AUTHOR);
+                wReview.setAuthor(wReviewCursor.getString(wReviewAuthorIndex));
+                int wReviewContentIndex = wReviewCursor.getColumnIndex(MovieContract.ReviewEntry.COLUMN_REVIEW_CONTENT);
+                wReview.setContent(wReviewCursor.getString(wReviewContentIndex));
+                wReviews.add(wReview);
+            }
+            mSelectedMovie.setTrailers(wTrailers);
+            mSelectedMovie.setReviews(wReviews);
         }
 
         private String makeRequest(Uri uri)
@@ -180,22 +397,9 @@ public class DetailFragment extends Fragment
             return responseString;
         }
 
-        protected void onPostExecute(String[] result) {
-            mReviews = new ArrayList<>();
-            mTrailers = new ArrayList<>();
-            if (result.length == 2)
-            {
-                try
-                {
-                    mTrailers = getTrailersFromJson(result[0]);
-                    mReviews = getReviewsFromJson(result[1]);
-                }
-                catch (JSONException ex)
-                {
-                    Log.e(LOG_TAG, "Error building arrays. Exception: " + ex);
-                }
-                populateListview();
-            }
+        protected void onPostExecute(Void params) {
+            populateListview();
+            setFavoriteStar();
         }
 
         private ArrayList<Review> getReviewsFromJson(String jsonString)
@@ -225,7 +429,6 @@ public class DetailFragment extends Fragment
                     thisReview.setId(reviewId);
                     thisReview.setAuthor(reviewAuthor);
                     thisReview.setContent(reviewContent);
-                    thisReview.setUrl(reviewUrl);
                     wReviews.add(thisReview);
                 }
                 catch (Exception ex)
@@ -242,12 +445,9 @@ public class DetailFragment extends Fragment
             ArrayList<Trailer> wTrailers = new ArrayList<>();
             //Names of json objects
             final String TRAILER_ID = "id";
-            final String TRAILER_ISO_639_1 = "iso_639_1";
             final String TRAILER_KEY = "key";
             final String TRAILER_NAME = "name";
             final String TRAILER_SITE = "site";
-            final String TRAILER_SIZE = "size";
-            final String TRAILER_TYPE = "type";
             final String TRAILER_RESULTS = "results";
 
             JSONObject trailerObject = new JSONObject(jsonString);
@@ -256,21 +456,14 @@ public class DetailFragment extends Fragment
             {
                 JSONObject thisObject = trailerArray.getJSONObject(i);
                 String trailerId = thisObject.getString(TRAILER_ID);
-                String trailerIso = thisObject.getString(TRAILER_ISO_639_1);
                 String trailerKey = thisObject.getString(TRAILER_KEY);
                 String trailerName = thisObject.getString(TRAILER_NAME);
                 String trailerSite = thisObject.getString(TRAILER_SITE);
-                String trailerSize = thisObject.getString(TRAILER_SIZE);
-                String trailerType = thisObject.getString(TRAILER_TYPE);
 
                 Trailer thisTrailer = new Trailer();
                 thisTrailer.setId(trailerId);
-                thisTrailer.setIso_639_1(trailerIso);
                 thisTrailer.setKey(trailerKey);
                 thisTrailer.setName(trailerName);
-                thisTrailer.setSite(trailerSite);
-                thisTrailer.setSize(trailerSize);
-                thisTrailer.setType(trailerType);
 
                 wTrailers.add(thisTrailer);
             }
@@ -279,4 +472,151 @@ public class DetailFragment extends Fragment
         }
 
     }
+
+    private void removeMovieFromFavorites()
+    {
+        int reviewsDelete = deleteReviews();
+        int trailersDeleted = deleteTrailers();
+        int moviesDeleted = deleteMovie();  //Will be only one
+    }
+
+    private int deleteReviews()
+    {
+        String movieIdString = String.valueOf(mSelectedMovie.getId());
+        int rowsDeleted = mContext.getContentResolver().delete(
+                MovieContract.ReviewEntry.buildReviewUriWithMovieId(movieIdString),
+                MovieContract.ReviewEntry.COLUMN_MOVIE_ID + MovieContract.SELECTION_SUFFIX,
+                new String[]{movieIdString}
+        );
+        return rowsDeleted;
+    }
+    private int deleteTrailers()
+    {
+        String movieIdString = String.valueOf(mSelectedMovie.getId());
+        int rowsDeleted = mContext.getContentResolver().delete(
+                MovieContract.TrailerEntry.buildTrailerUriWithMovieId(movieIdString),
+                MovieContract.TrailerEntry.COLUMN_MOVIE_ID + MovieContract.SELECTION_SUFFIX,
+                new String[]{movieIdString}
+        );
+        return rowsDeleted;
+    }
+    private int deleteMovie()
+    {
+        String movieIdString = String.valueOf(mSelectedMovie.getId());
+        int rowsDeleted = mContext.getContentResolver().delete(
+                MovieContract.MovieEntry.buildMovieUriWithId(movieIdString),
+                MovieContract.MovieEntry._ID + MovieContract.SELECTION_SUFFIX,
+                new String[]{movieIdString}
+        );
+        return rowsDeleted;
+    }
+
+    private long addMovieToFavorites()
+    {
+        long _id = addMovie();
+        mSelectedMovie.setId(_id);
+        addTrailers();
+        addReviews();
+        return _id;
+    }
+
+    private long checkIfMovieExists(String movieId)
+    {
+        long _id;
+
+        //Check to see if a movie with this id already exists
+        Cursor movieCursor = mContext.getContentResolver().query(
+                MovieContract.MovieEntry.buildMovieUriWithId(movieId),
+                new String[]{ MovieContract.MovieEntry._ID },
+                MovieContract.MovieEntry.COLUMN_MOVIE_ID + MovieContract.SELECTION_SUFFIX,
+                new String[]{ movieId },
+                null
+        );
+
+        if (movieCursor.moveToFirst())
+        {
+            int movieIdIndex = movieCursor.getColumnIndex(MovieContract.MovieEntry._ID);
+            _id = movieCursor.getLong(movieIdIndex);
+        }
+        else
+        {
+            _id = -1;
+        }
+        return _id;
+    }
+
+    private long addMovie()
+    {
+        long _id;
+        //Check to see if a movie with this id already exists
+        String movieId = String.valueOf(mSelectedMovie.getMovieId());
+        Cursor movieCursor = mContext.getContentResolver().query(
+                MovieContract.MovieEntry.buildMovieUriWithId(movieId),
+                new String[]{ MovieContract.MovieEntry._ID },
+                MovieContract.MovieEntry.COLUMN_MOVIE_ID + MovieContract.SELECTION_SUFFIX,
+                new String[]{ movieId },
+                null
+        );
+
+        String dateString = "";
+        if (movieCursor.moveToFirst())
+        {
+            int movieIdIndex = movieCursor.getColumnIndex(MovieContract.MovieEntry._ID);
+            _id = movieCursor.getLong(movieIdIndex);
+        }
+        else
+        {
+            ContentValues wContentValues = new ContentValues();
+            wContentValues.put(MovieContract.MovieEntry.COLUMN_MOVIE_ID, mSelectedMovie.getMovieId());
+            wContentValues.put(MovieContract.MovieEntry.COLUMN_MOVIE_TITLE, mSelectedMovie.getTitle());
+            wContentValues.put(MovieContract.MovieEntry.COLUMN_MOVIE_BACKDROP_PATH, mSelectedMovie.getBackdropPath());
+            wContentValues.put(MovieContract.MovieEntry.COLUMN_MOVIE_POSTER_PATH, mSelectedMovie.getPosterPath());
+            wContentValues.put(MovieContract.MovieEntry.COLUMN_MOVIE_OVERVIEW, mSelectedMovie.getOverview());
+            wContentValues.put(MovieContract.MovieEntry.COLUMN_MOVIE_POPULARITY, mSelectedMovie.getPopularity());
+            wContentValues.put(MovieContract.MovieEntry.COLUMN_MOVIE_VOTE_AVERAGE, mSelectedMovie.getVoteAverage());
+            wContentValues.put(MovieContract.MovieEntry.COLUMN_MOVIE_VOTE_COUNT, mSelectedMovie.getVoteCount());
+            wContentValues.put(MovieContract.MovieEntry.COLUMN_MOVIE_RELEASE_DATE, String.valueOf(mSelectedMovie.getReleaseDate()));
+            Uri insertUri = mContext.getContentResolver().insert(MovieContract.MovieEntry.CONTENT_URI, wContentValues);
+            _id = ContentUris.parseId(insertUri);
+        }
+        return _id;
+    }
+
+    private void addTrailers()
+    {
+        ContentValues[] wContentValues = new ContentValues[mSelectedMovie.getTrailers().size()];
+        for (int i = 0; i < mSelectedMovie.getTrailers().size(); i ++)
+        {
+            Trailer trailer = mSelectedMovie.getTrailers().get(i);
+            ContentValues wValue = new ContentValues();
+            wValue.put(MovieContract.TrailerEntry.COLUMN_MOVIE_ID, mSelectedMovie.getId());
+            wValue.put(MovieContract.TrailerEntry.COLUMN_TRAILER_ID, trailer.getId());
+            wValue.put(MovieContract.TrailerEntry.COLUMN_TRAILER_KEY, trailer.getKey());
+            wValue.put(MovieContract.TrailerEntry.COLUMN_TRAILER_NAME, trailer.getName());
+            wContentValues[i] = wValue;
+        }
+        int rowsInserted = mContext.getContentResolver().bulkInsert(
+                MovieContract.TrailerEntry.CONTENT_URI,
+                wContentValues
+        );
+    }
+    private void addReviews()
+    {
+        ContentValues[] wContentValues = new ContentValues[mSelectedMovie.getReviews().size()];
+        for (int i = 0; i < mSelectedMovie.getReviews().size(); i ++)
+        {
+            Review review = mSelectedMovie.getReviews().get(i);
+            ContentValues wValue = new ContentValues();
+            wValue.put(MovieContract.ReviewEntry.COLUMN_MOVIE_ID, mSelectedMovie.getId());
+            wValue.put(MovieContract.ReviewEntry.COLUMN_REVIEW_ID, review.getId());
+            wValue.put(MovieContract.ReviewEntry.COLUMN_REVIEW_CONTENT, review.getContent());
+            wValue.put(MovieContract.ReviewEntry.COLUMN_REVIEW_AUTHOR, review.getAuthor());
+            wContentValues[i] = wValue;
+        }
+        int rowsInserted = mContext.getContentResolver().bulkInsert(
+                MovieContract.ReviewEntry.CONTENT_URI,
+                wContentValues
+        );
+    }
+
 }

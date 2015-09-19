@@ -1,14 +1,15 @@
 package udacity.graingersoftware.com.popularmovies.models;
 
+import java.io.Serializable;
+
 /**
  * Created by graingersoftware on 9/6/15.
  */
-public class Review
+public class Review implements Serializable
 {
     public String mId;
     public String mAuthor;
     public String mContent;
-    public String mUrl;
 
     public String getId()
     {
@@ -38,15 +39,5 @@ public class Review
     public void setContent(final String content)
     {
         mContent = content;
-    }
-
-    public String getUrl()
-    {
-        return mUrl;
-    }
-
-    public void setUrl(final String url)
-    {
-        mUrl = url;
     }
 }
