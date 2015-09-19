@@ -15,20 +15,33 @@
     <string-array name="prefs_sort_list">
         <item>Most Popular</item>
         <item>Highest Rated</item>
+        <item>Favorites</item>
     </string-array>
 
     <string-array name="prefs_sort_values">
         <item>popularity.desc</item>
         <item>vote_average.desc</item>
+        <item>Favorites</item>
     </string-array>
     <string name="title_activity_detail">Movie Details</string>
 
     <!--************   Prefs Strings and String Arrays  *****************-->
 
-    <string name="favorite_button_text">MARK AS FAVORITE</string>
+    <string name="favorite_button_text_mark">MARK AS FAVORITE</string>
+    <string name="favorite_button_text_remove">REMOVE FROM FAVORITES</string>
+
     <string name="movie_base_url">https://api.themoviedb.org/3/discover/movie?</string>
+
+    <string name="rating_trailer_base_url">https://api.themoviedb.org/3/movie</string>
+    <string name="youtube_base_url">http://www.youtube.com/watch</string>
+
     <string name="poster_base_url">http://image.tmdb.org/t/p/w185</string>
     <string name="synopsis_not_available">Plot synopsis not available.</string>
 
+    <string name="trailer_heading">Trailers:</string>
+    <string name="review_heading">Reviews:</string>
+
+    <string name="favorites_sort_param">Favorites</string>
+    <string name="vote_suffix"> / 10</string>
 
 </resources>

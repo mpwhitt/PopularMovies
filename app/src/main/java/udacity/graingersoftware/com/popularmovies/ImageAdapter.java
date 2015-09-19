@@ -23,6 +23,8 @@ public class ImageAdapter extends BaseAdapter
     private Context mContext;
     private ArrayList<Movie> mMovies;
     private String LOG_TAG;
+    private boolean mIsTwoPane;
+    private MainFragment.Callback mCallback;
 
     public ArrayList<Movie> getMovies()
     {
@@ -34,9 +36,10 @@ public class ImageAdapter extends BaseAdapter
         mMovies = movies;
     }
 
-    public ImageAdapter(Context c, ArrayList<Movie> movies) {
+    public ImageAdapter(Context c, ArrayList<Movie> movies, boolean isTwoPane) {
         mContext = c;
         mMovies = movies;
+        mIsTwoPane = isTwoPane;
         LOG_TAG = mContext.getClass().getSimpleName();
     }
 
@@ -59,12 +62,11 @@ public class ImageAdapter extends BaseAdapter
 
     public View getView(int position, View convertView, ViewGroup parent) {
         ImageView imageView;
-
         if (convertView == null) {
             imageView = new ImageView(mContext);
             imageView.setAdjustViewBounds(true);
             imageView.setScaleType(ImageView.ScaleType.FIT_XY);
-            imageView = setLayoutParams(imageView);
+            imageView = setLayoutParams(imageView, parent);
         }
         else {
             imageView = (ImageView) convertView;
@@ -77,7 +79,7 @@ public class ImageAdapter extends BaseAdapter
         return imageView;
     }
 
-    private ImageView setLayoutParams(ImageView imageView)
+    private ImageView setLayoutParams(ImageView imageView, View parent)
     {
 
         Display display = ((WindowManager) mContext.getSystemService(Context.WINDOW_SERVICE)).getDefaultDisplay();
@@ -90,10 +92,22 @@ public class ImageAdapter extends BaseAdapter
         int imageWidth = 0;
         int imageHeight = 0;
         Configuration config = mContext.getResources().getConfiguration();
+
+        View mainView = (View)parent.getParent().getParent();
+        View detailView = mainView.findViewById(R.id.movie_detail_container);
+        if (detailView != null)
+        {
+            mIsTwoPane = true;
+        }
+
         if (config.orientation == Configuration.ORIENTATION_PORTRAIT)
         {
             //Device is in portrait orientation.  Set the image width at 1/2 of the screen width.  The height will be proportional
             //to the width
+            if (mIsTwoPane)
+            {
+                dpWidth = dpWidth / 2;
+            }
             imageWidth = (int)(dpWidth / 2);
             imageHeight = (int)(imageWidth * 1.5);
         }
@@ -101,8 +115,15 @@ public class ImageAdapter extends BaseAdapter
         {
             //Device is in landscape orientation.  Set the image width at 1/3 of the screen width.  The height will be proportional
             //to the width
+            //Check to see if in two pane mode
+
+            if (mIsTwoPane)
+            {
+                dpWidth = dpWidth / 2;
+            }
             imageWidth = (int)(dpWidth / 3);
             imageHeight = (int)(imageWidth * 1.5);
+
         }
         //Convert the dp units back to pixels for the layout params
         int width = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, imageWidth, mContext.getResources().getDisplayMetrics());
