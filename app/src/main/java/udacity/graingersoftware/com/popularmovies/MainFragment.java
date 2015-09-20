@@ -301,8 +301,8 @@ public class MainFragment extends Fragment
             final String MOVIE_VOTE_AVERAGE = "vote_average";
             final String MOVIE_VOTE_COUNT = "vote_count";
 
-            JSONObject forecastJson = new JSONObject(movieJsonStr);
-            JSONArray movieArray = forecastJson.getJSONArray(MOVIE_RESULTS);
+            JSONObject movieJson = new JSONObject(movieJsonStr);
+            JSONArray movieArray = movieJson.getJSONArray(MOVIE_RESULTS);
 
             for(int i = 0; i < movieArray.length(); i++)
             {

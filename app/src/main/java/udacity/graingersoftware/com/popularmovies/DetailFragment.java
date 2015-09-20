@@ -158,6 +158,7 @@ public class DetailFragment extends Fragment implements MyButtonInterface, Butto
         ((ActionBarActivity)getActivity()).getSupportActionBar().setDisplayOptions(((
                 ActionBarActivity) getActivity()).getSupportActionBar().getDisplayOptions() | ActionBar.DISPLAY_SHOW_CUSTOM);
 
+        //Example taken from StackOverflow on how to add ImageView to ActionBar
         ImageView imageView = new ImageView(((ActionBarActivity)getActivity()).getSupportActionBar().getThemedContext());
         imageView.setScaleType(ImageView.ScaleType.CENTER);
 
