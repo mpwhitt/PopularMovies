@@ -44,4 +44,7 @@
     <string name="favorites_sort_param">Favorites</string>
     <string name="vote_suffix"> / 10</string>
 
+    <string name="share_movie_string">Watch the trailer for</string>
+    <string name="action_share">Share</string>
+
 </resources>

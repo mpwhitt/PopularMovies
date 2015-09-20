@@ -11,11 +11,16 @@ import android.os.AsyncTask;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.support.v4.app.Fragment;
+import android.support.v4.view.MenuItemCompat;
 import android.support.v7.app.ActionBar;
 import android.support.v7.app.ActionBarActivity;
+import android.support.v7.widget.ShareActionProvider;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.LayoutInflater;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
@@ -56,9 +61,12 @@ public class DetailFragment extends Fragment implements MyButtonInterface, Butto
     private Movie mSelectedMovie;
     private Button mToggleButton;
     private boolean mIsTwoPane;
+    private ShareActionProvider mShareActionProvider;
+    private String mFirstTrailerUrl;
 
     public DetailFragment()
     {
+
     }
 
     @Override
@@ -70,6 +78,7 @@ public class DetailFragment extends Fragment implements MyButtonInterface, Butto
         {
             return null;
         }
+        setHasOptionsMenu(true);
         View rootView = inflater.inflate(R.layout.fragment_detail, container, false);
         mContext = getActivity();
 
@@ -201,6 +210,10 @@ public class DetailFragment extends Fragment implements MyButtonInterface, Butto
     {
         mDetailListViewAdapter = new DetailListViewAdapter(getActivity(), this, mSelectedMovie, this);
         mListView.setAdapter(mDetailListViewAdapter);
+        // If onCreateOptionsMenu has already happened, we need to update the share intent now.
+        if (mShareActionProvider != null) {
+            mShareActionProvider.setShareIntent(createShareMovieIntent());
+        }
     }
 
     @Override
@@ -619,4 +632,42 @@ public class DetailFragment extends Fragment implements MyButtonInterface, Butto
         );
     }
 
+    private Intent createShareMovieIntent() {
+        if (mSelectedMovie != null)
+        {
+            if (mSelectedMovie.getTrailers().size() > 0)
+            {
+                final String MOVIE_BASE_URL = getString(R.string.youtube_base_url);
+                final String KEY_PARAM = "v";
+
+                Uri wTrailerUri = Uri.parse(MOVIE_BASE_URL).buildUpon()
+                        .appendQueryParameter(KEY_PARAM, mSelectedMovie.getTrailers().get(0).getKey())
+                        .build();
+                mFirstTrailerUrl = wTrailerUri.toString();
+            }
+        }
+        Intent shareIntent = new Intent(Intent.ACTION_SEND);
+        shareIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_WHEN_TASK_RESET);
+        shareIntent.setType("text/plain");
+        shareIntent.putExtra(Intent.EXTRA_TEXT, getString(R.string.share_movie_string) +
+                " " + mSelectedMovie.getTitle() + " \n " + mFirstTrailerUrl);
+        return shareIntent;
+    }
+
+    @Override
+    public void onCreateOptionsMenu(Menu menu, MenuInflater inflater) {
+        // Inflate the menu; this adds items to the action bar if it is present.
+        inflater.inflate(R.menu.detailfragment, menu);
+
+        // Retrieve the share menu item
+        MenuItem menuItem = menu.findItem(R.id.action_share);
+
+        // Get the provider and hold onto it to set/change the share intent.
+        mShareActionProvider = (ShareActionProvider) MenuItemCompat.getActionProvider(menuItem);
+
+        // If onLoadFinished happens before this, we can go ahead and set the share intent now.
+        if (mFirstTrailerUrl != null) {
+            mShareActionProvider.setShareIntent(createShareMovieIntent());
+        }
+    }
 }
